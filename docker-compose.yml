@@ -1,0 +1,62 @@
+version: "3"
+services:
+    database:
+        image: mysql:latest
+        restart: unless-stopped
+        env_file: .env
+        environment:
+            MYSQL_DATABASE: ${DB_NAME}
+            MYSQL_USER: ${DB_USER}
+            MYSQL_PASSWORD: ${DB_PASS}
+            MYSQL_ROOT_PASSWORD: ${DB_PASS}
+        command: --default-authentication-plugin=mysql_native_password
+        volumes:
+            - "./data/panel/database:/var/lib/mysql"
+    cache:
+        image: redis:alpine
+        env_file: .env
+        restart: unless-stopped
+    panel:
+        image: ghcr.io/pterodactyl/panel:latest
+        restart: unless-stopped
+        env_file: .env
+        ports:
+            - "8448:80"
+            - "8443:443"
+        links:
+            - database
+            - cache
+        volumes:
+            - "./data/panel/var/:/app/var/"
+            - "./data/panel/nginx/:/etc/nginx/conf.d/"
+            - "./data/panel/certs/:/etc/letsencrypt/"
+            - "./data/panel/logs/:/app/storage/logs"
+        environment:
+            DB_PASSWORD: ${DB_PASS}
+            APP_ENV: "production"
+            APP_ENVIRONMENT_ONLY: "false"
+            CACHE_DRIVER: "redis"
+            SESSION_DRIVER: "redis"
+            QUEUE_DRIVER: "redis"
+            REDIS_HOST: "cache"
+            DB_HOST: "database"
+    wings:
+        image: ghcr.io/pterodactyl/wings:latest
+        restart: unless-stopped
+        network_mode: "host"
+        tty: true
+        env_file: .env
+        environment:
+            TZ: "UTC"
+            WINGS_UID: 988
+            WINGS_GID: 988
+            WINGS_USERNAME: pterodactyl
+        volumes:
+            - "/var/run/docker.sock:/var/run/docker.sock"
+            - "/var/lib/docker/containers/:/var/lib/docker/containers/"
+            - "./data/wings/pterodactyl/:/etc/pterodactyl/"
+            - "./data/wings/lib/pterodactyl/:/var/lib/pterodactyl/"
+            - "./data/wings/log/pterodactyl/:/var/log/pterodactyl/"
+            - "/tmp/pterodactyl/:/tmp/pterodactyl/"
+            - "./data/wings/ssl/certs:/etc/ssl/certs:ro"
+            - "./data/wings/letsencrypt/:/etc/letsencrypt/"
